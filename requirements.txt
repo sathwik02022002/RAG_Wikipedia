@@ -1,0 +1,7 @@
+flask
+flask-cors
+pdfplumber
+faiss-cpu
+scikit-learn
+numpy
+openai

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ML Wikipedia RAG</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f5f5f5;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 16px rgba(0,0,0,.08);
+    padding: 36px 40px;
+    width: 100%;
+    max-width: 680px;
+  }
+  h1 { font-size: 20px; font-weight: 700; color: #111; margin-bottom: 4px; }
+  .sub { font-size: 13px; color: #888; margin-bottom: 28px; }
+
+  .status {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: #888;
+    margin-bottom: 24px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: #f9f9f9;
+    border: 1px solid #eee;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; flex-shrink: 0; }
+  .dot.green { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+  .dot.red   { background: #ef4444; }
+
+  label { display: block; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 8px; }
+  .input-row { display: flex; gap: 8px; margin-bottom: 16px; }
+  .input-row input {
+    flex: 1; padding: 12px 16px;
+    border: 1px solid #ddd; border-radius: 8px;
+    font-size: 15px; outline: none;
+  }
+  .input-row input:focus { border-color: #4f46e5; }
+  button {
+    padding: 12px 22px;
+    background: #4f46e5; color: #fff;
+    border: none; border-radius: 8px;
+    font-size: 14px; font-weight: 600;
+    cursor: pointer; white-space: nowrap;
+  }
+  button:disabled { background: #a5b4fc; cursor: not-allowed; }
+
+  .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+  .preset {
+    padding: 6px 14px;
+    background: #f0f0f0; border: none;
+    border-radius: 20px; font-size: 12px;
+    color: #444; cursor: pointer; font-weight: 500;
+  }
+  .preset:hover { background: #e0e0ff; color: #4f46e5; }
+
+  hr { border: none; border-top: 1px solid #eee; margin-bottom: 24px; }
+
+  .answer-box {
+    background: #fafafa; border: 1px solid #e8e8e8;
+    border-radius: 10px; padding: 20px;
+  }
+  .answer-label {
+    font-size: 11px; font-weight: 700; color: #888;
+    letter-spacing: 1px; margin-bottom: 10px; text-transform: uppercase;
+  }
+  .answer-text { font-size: 15px; line-height: 1.7; color: #222; white-space: pre-wrap; }
+  .sources { margin-top: 16px; border-top: 1px solid #eee; padding-top: 14px; }
+  .sources-label {
+    font-size: 11px; font-weight: 700; color: #aaa;
+    letter-spacing: 1px; margin-bottom: 8px; text-transform: uppercase;
+  }
+  .source-item {
+    font-size: 12px; color: #666;
+    padding: 8px 12px; background: #f5f5f5;
+    border-radius: 6px; margin-bottom: 6px; line-height: 1.5;
+  }
+  .error { color: #dc2626; font-size: 13px; margin-top: 12px; }
+  .spinner {
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid #fff; border-top-color: transparent;
+    border-radius: 50%; animation: spin .7s linear infinite;
+    vertical-align: middle; margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>ML Wikipedia — RAG Q&A</h1>
+  <div class="sub">Answers come from the full 40-page Wikipedia PDF via your local Python server.</div>
+
+  <div class="status">
+    <div class="dot" id="status-dot"></div>
+    <span id="status-text">Checking server...</span>
+  </div>
+
+  <label>Your Question</label>
+  <div class="input-row">
+    <input type="text" id="query"
+      placeholder="e.g. What is supervised learning?"
+      onkeydown="if(event.key==='Enter') ask()" />
+    <button id="ask-btn" onclick="ask()">Ask</button>
+  </div>
+
+  <div class="presets">
+    <button class="preset" onclick="setQ(this)">What is supervised learning?</button>
+    <button class="preset" onclick="setQ(this)">How does reinforcement learning work?</button>
+    <button class="preset" onclick="setQ(this)">What are neural networks?</button>
+    <button class="preset" onclick="setQ(this)">What is overfitting?</button>
+    <button class="preset" onclick="setQ(this)">Who coined machine learning?</button>
+    <button class="preset" onclick="setQ(this)">What are SVMs?</button>
+    <button class="preset" onclick="setQ(this)">What is federated learning?</button>
+    <button class="preset" onclick="setQ(this)">What hardware is used for deep learning?</button>
+  </div>
+
+  <hr>
+
+  <div id="output" style="display:none">
+    <div class="answer-box">
+      <div class="answer-label">Answer</div>
+      <div class="answer-text" id="answer-text"></div>
+      <div class="sources">
+        <div class="sources-label">Retrieved Chunks</div>
+        <div id="sources-list"></div>
+      </div>
+    </div>
+  </div>
+  <div class="error" id="error-msg"></div>
+</div>
+
+<script>
+// ── Change this to your Render URL after deploying ──────────
+const SERVER = "https://YOUR-APP-NAME.onrender.com";
+// During local development, change it back to: http://localhost:5000
+
+// Check server health on load
+async function checkServer() {
+  try {
+    const r = await fetch(SERVER + "/health");
+    const d = await r.json();
+    document.getElementById("status-dot").className = "dot green";
+    document.getElementById("status-text").textContent =
+      `Server ready — ${d.chunks} chunks loaded from PDF`;
+  } catch {
+    document.getElementById("status-dot").className = "dot red";
+    document.getElementById("status-text").textContent =
+      "Server not running — start it with: python app.py";
+  }
+}
+checkServer();
+
+function setQ(btn) {
+  document.getElementById("query").value = btn.textContent;
+}
+
+async function ask() {
+  const q = document.getElementById("query").value.trim();
+  const btn = document.getElementById("ask-btn");
+  const errEl = document.getElementById("error-msg");
+
+  errEl.textContent = "";
+  if (!q) { errEl.textContent = "Please enter a question."; return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Thinking…';
+  document.getElementById("output").style.display = "none";
+
+  try {
+    const resp = await fetch(SERVER + "/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: q })
+    });
+    const data = await resp.json();
+
+    if (data.error) throw new Error(data.error);
+
+    document.getElementById("answer-text").textContent = data.answer;
+    document.getElementById("sources-list").innerHTML =
+      data.sources.map(s => `<div class="source-item">${s}</div>`).join("");
+    document.getElementById("output").style.display = "block";
+
+  } catch (e) {
+    errEl.textContent = "Error: " + e.message +
+      (e.message.includes("fetch") ? " — is app.py running?" : "");
+  }
+
+  btn.disabled = false;
+  btn.textContent = "Ask";
+}
+</script>
+</body>
+</html>
