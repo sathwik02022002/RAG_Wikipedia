@@ -35,7 +35,7 @@ class Chunk:
     text: str
     metadata: Dict = field(default_factory=dict)
 
-# PDF extraction 
+# ── PDF extraction ────────────────────────────────────────────
 
 def extract_pdf(path: str) -> str:
     def clean(text):
@@ -59,7 +59,8 @@ def extract_pdf(path: str) -> str:
     print(f"\n[PDF] Done — {len(' '.join(pages).split())} words extracted")
     return "\n\n".join(pages)
 
-# Chunking
+# ── Chunking ──────────────────────────────────────────────────
+
 def make_chunks(text: str) -> List[Chunk]:
     """Semantic section chunking — best strategy from evaluation."""
     paras = [p.strip() for p in re.split(r'\n\s*\n', text) if p.strip()]
@@ -77,7 +78,7 @@ def make_chunks(text: str) -> List[Chunk]:
         merged.append(buf)
     return [Chunk(i, t) for i, t in enumerate(merged)]
 
-# Embedding (LSA)
+# ── Embedding (LSA) ───────────────────────────────────────────
 
 class EmbeddingModel:
     def __init__(self, n=128):
@@ -94,7 +95,7 @@ class EmbeddingModel:
         mat = self.vec.transform(texts)
         return normalize(self.svd.transform(mat).astype(np.float32), norm='l2')
 
-# BM25
+# ── BM25 ──────────────────────────────────────────────────────
 
 class BM25:
     def __init__(self, k1=1.5, b=0.75):
@@ -128,7 +129,7 @@ class BM25:
         top = heapq.nlargest(k, scores, key=lambda x: x[0])
         return [(self.chunks[i], sc) for sc, i in top if sc > 0]
 
-# Retrieval
+# ── Retrieval ─────────────────────────────────────────────────
 
 def hybrid_search(query, chunks, embed, vs_index, bm25, k=5):
     # Dense
@@ -146,7 +147,7 @@ def hybrid_search(query, chunks, embed, vs_index, bm25, k=5):
     ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
     return [cmap[cid] for cid, _ in ranked[:k]]
 
-#Global pipeline state
+# ── Global pipeline state ─────────────────────────────────────
 
 print("\n[Startup] Loading pipeline...")
 
@@ -180,16 +181,19 @@ LLM_ENDPOINT     = LLM_ENDPOINT
 LLM_MODEL        = os.environ.get("LLM_MODEL", "")
 print("[Pipeline] Ready ✓\n")
 
-#Flask routes 
+# ── Flask routes ──────────────────────────────────────────────
 
 @app.route("/ask", methods=["POST"])
 def ask():
+    if not pipeline_ready:
+        return jsonify({"error": "PDF not loaded. Add Machine_learning_-_Wikipedia.pdf to your repo."}), 503
+
     data     = request.json
     question = data.get("question", "").strip()
     if not question:
         return jsonify({"error": "No question provided"}), 400
 
-    top_chunks = hybrid_search(question, chunks, embed, vs_index, bm25, k=5)
+    top_chunks = hybrid_search(question, chunks, embed, vs_index, bm25_idx, k=5)
     context    = "\n\n---\n\n".join(
         f"[Chunk {i+1}]\n{c.text}" for i, c in enumerate(top_chunks))
 
@@ -222,7 +226,11 @@ def ask():
 
 @app.route("/health")
 def health():
-    return jsonify({"status": "ok", "chunks": len(chunks)})
+    return jsonify({
+        "status": "ok" if pipeline_ready else "pdf_missing",
+        "chunks": len(chunks),
+        "pipeline_ready": pipeline_ready
+    })
 
 if __name__ == "__main__":
     print("Server running at http://localhost:5000")
