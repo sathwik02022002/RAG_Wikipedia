@@ -141,7 +141,8 @@
 </div>
 
 <script>
-const SERVER = "https://rag-wikipedia-cgjd.onrender.com";
+// ── Change this to your Render URL after deploying ──────────
+const SERVER = "https://YOUR-APP-NAME.onrender.com";
 // During local development, change it back to: http://localhost:5000
 
 // Check server health on load
@@ -155,10 +156,11 @@ async function checkServer() {
   } catch {
     document.getElementById("status-dot").className = "dot red";
     document.getElementById("status-text").textContent =
-      "Server not running — start it with: python app.py";
+      "Connecting to server (may take ~30s to wake up)...";
   }
 }
 checkServer();
+setInterval(checkServer, 10000);
 
 function setQ(btn) {
   document.getElementById("query").value = btn.textContent;
@@ -190,6 +192,7 @@ async function ask() {
     document.getElementById("sources-list").innerHTML =
       data.sources.map(s => `<div class="source-item">${s}</div>`).join("");
     document.getElementById("output").style.display = "block";
+    checkServer();
 
   } catch (e) {
     errEl.textContent = "Error: " + e.message +
